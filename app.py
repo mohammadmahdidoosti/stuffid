@@ -358,6 +358,37 @@ def match_products(names, top=6, parts=None):
             for i, name in enumerate(names)]
 
 
+def export_general():
+    """Log every general (عمومی) stuff ID once, latest edit wins, as compact pipe-separated lines."""
+    best = {}
+    for p in sorted(PARTS):
+        for row in iter_rows(p):
+            if "عمومی" not in row[8]:
+                continue
+            prev = best.get(row[0])
+            if prev is None or row[7] > prev[7]:
+                best[row[0]] = row
+        print(f"PROGRESS general part {p} unique={len(best)}", flush=True)
+    origin = {"شناسه عمومی وارداتی": "I", "شناسه عمومی تولید داخل": "D"}
+    lines = []
+    for rid in sorted(best):
+        r = best[rid]
+        desc = r[1].replace("|", "/").replace("\n", " ")
+        lines.append("|".join([rid, origin.get(r[8], r[8]), r[2], r[3], r[5], r[7], desc]))
+    # pack lines into ~3000-char log messages (lines never split)
+    buf, n = [], 0
+    for ln in lines:
+        if buf and sum(len(x) + 1 for x in buf) + len(ln) > 3000:
+            n += 1
+            print("GEN " + str(n) + " " + "\n".join(buf).replace("\n", " ¶ "), flush=True)
+            buf = []
+        buf.append(ln)
+    if buf:
+        n += 1
+        print("GEN " + str(n) + " " + "\n".join(buf).replace("\n", " ¶ "), flush=True)
+    print(f"GENDONE chunks={n} rows={len(lines)}", flush=True)
+
+
 def run_job():
     job = os.environ.get("JOB", "").strip()
     if not job:
@@ -375,6 +406,8 @@ def run_job():
                 parts = [int(x) for x in arg.split(",")] if arg else None
                 for n, res in enumerate(match_products(names, parts=parts), 1):
                     log_result(f"match:{n}", res)
+            elif kind == "export_general":
+                export_general()
             elif kind == "stats":
                 parts = [int(x) for x in arg.split(",")] if arg else sorted(PARTS)
                 stats_all(parts)
