@@ -180,6 +180,94 @@ def keepalive():
             pass
 
 
+def stats_part(part, ids_out):
+    """Stream the CSV inside one zip and collect summary statistics."""
+    import csv
+    import io
+    from array import array
+    from collections import Counter
+    t0 = time.time()
+    path = download(part)
+    st = {"part": part, "rows": 0, "bad_rows": 0, "bad_id": 0, "desc_len_sum": 0, "desc_len_max": 0,
+          "csv_bytes": 0, "Type": Counter(), "Vat": Counter(), "Taxable": Counter(),
+          "has_expiration": 0, "has_pricing": 0, "id_prefix": Counter(),
+          "run_year": Counter(), "examples_bad": []}
+    ids = array("q")
+    last_ping = time.time()
+    with zipfile.ZipFile(path) as z:
+        zi = [i for i in z.infolist() if i.filename.lower().endswith(".csv")][0]
+        st["csv_bytes"] = zi.file_size
+        with z.open(zi) as raw:
+            reader = csv.reader(io.TextIOWrapper(raw, encoding="utf-8-sig", newline=""))
+            header = next(reader)
+            st["header"] = header
+            for row in reader:
+                if len(row) != 10:
+                    st["bad_rows"] += 1
+                    if len(st["examples_bad"]) < 3:
+                        st["examples_bad"].append(row[:12])
+                    continue
+                st["rows"] += 1
+                rid = row[0].strip()
+                if rid.isdigit() and len(rid) == 13:
+                    ids.append(int(rid))
+                    st["id_prefix"][rid[:2]] += 1
+                else:
+                    st["bad_id"] += 1
+                d = len(row[1])
+                st["desc_len_sum"] += d
+                if d > st["desc_len_max"]:
+                    st["desc_len_max"] = d
+                st["Vat"][row[2]] += 1
+                st["Taxable"][row[3]] += 1
+                st["run_year"][row[4][:4]] += 1
+                if row[5]:
+                    st["has_expiration"] += 1
+                st["Type"][row[8]] += 1
+                if row[9]:
+                    st["has_pricing"] += 1
+                if st["rows"] % 500000 == 0:
+                    print(f"PROGRESS part {part} rows {st['rows']} t={round(time.time() - t0)}s", flush=True)
+                if time.time() - last_ping > 240:
+                    keepalive()
+                    last_ping = time.time()
+    import numpy as np
+    st["unique_ids_in_part"] = int(np.unique(np.frombuffer(ids, dtype=np.int64)).size)
+    ids_out.extend(ids)
+    del ids
+    for k in ("Type", "Vat", "Taxable", "id_prefix", "run_year"):
+        st[k] = dict(st[k].most_common(25))
+    st["seconds"] = round(time.time() - t0)
+    try:
+        os.remove(path)  # free the small /tmp disk
+    except OSError:
+        pass
+    return st
+
+
+def stats_all(parts):
+    from array import array
+    all_ids = array("q")
+    summary = {"parts": {}}
+    for p in parts:
+        try:
+            st = stats_part(p, all_ids)
+            log_result(f"stats:{p}", st)
+            summary["parts"][p] = st["rows"]
+        except Exception as ex:
+            log_result(f"stats:{p}", {"error": repr(ex)})
+        keepalive()
+    import numpy as np
+    a = np.frombuffer(all_ids, dtype=np.int64).copy()
+    a.sort()
+    dup_mask = a[1:] == a[:-1]
+    summary["total_rows_with_valid_id"] = int(a.size)
+    summary["duplicate_id_rows"] = int(dup_mask.sum())
+    summary["unique_ids"] = int(a.size - dup_mask.sum())
+    summary["sample_duplicate_ids"] = [int(x) for x in np.unique(a[1:][dup_mask])[:10]]
+    log_result("stats:total", summary)
+
+
 def run_job():
     job = os.environ.get("JOB", "").strip()
     if not job:
@@ -190,6 +278,9 @@ def run_job():
         try:
             if kind == "inspect":
                 log_result(step, inspect_part(int(arg)))
+            elif kind == "stats":
+                parts = [int(x) for x in arg.split(",")] if arg else sorted(PARTS)
+                stats_all(parts)
         except Exception as ex:
             log_result(step, {"error": repr(ex)})
         keepalive()
