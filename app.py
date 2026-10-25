@@ -268,6 +268,98 @@ def stats_all(parts):
     log_result("stats:total", summary)
 
 
+def iter_rows(part):
+    """Yield CSV rows (lists of 10 fields) of one part."""
+    import csv
+    import io
+    path = download(part)
+    with zipfile.ZipFile(path) as z:
+        zi = [i for i in z.infolist() if i.filename.lower().endswith(".csv")][0]
+        with z.open(zi) as raw:
+            reader = csv.reader(io.TextIOWrapper(raw, encoding="utf-8-sig", newline=""))
+            next(reader)
+            for row in reader:
+                if len(row) == 10:
+                    yield row
+
+
+def match_products(names, top=6):
+    """Score every stuff-ID row against each product name (token overlap weighted by IDF)."""
+    import heapq
+    import math
+    from collections import defaultdict
+    from matcher import tokens
+
+    prods = [list(dict.fromkeys(tokens(n))) for n in names]
+    vocab = defaultdict(list)
+    for i, toks in enumerate(prods):
+        for t in toks:
+            vocab[t].append(i)
+
+    t0 = time.time()
+    df = defaultdict(int)
+    n_rows = 0
+    for p in sorted(PARTS):
+        for row in iter_rows(p):
+            n_rows += 1
+            for t in set(tokens(row[1])):
+                if t in vocab:
+                    df[t] += 1
+        print(f"PROGRESS df part {p} t={round(time.time() - t0)}s", flush=True)
+        keepalive()
+    idf = {t: math.log((n_rows + 1) / (df.get(t, 0) + 1)) for t in vocab}
+    total = [sum(idf[t] for t in toks) or 1.0 for toks in prods]
+    pset = [set(toks) for toks in prods]
+
+    spec = [({}, []) for _ in names]   # specific IDs: score = share of product name covered
+    gen = [({}, []) for _ in names]    # general IDs: score = share of ID description covered by product
+
+    def offer(slot, score, row, cap):
+        d, h = slot
+        rid = row[0]
+        prev = d.get(rid)
+        if prev is not None:
+            if score > prev[0] or (score == prev[0] and row[7] > prev[1][7]):
+                d[rid] = (max(score, prev[0]), row)
+            return
+        if len(h) < cap:
+            heapq.heappush(h, (score, rid))
+            d[rid] = (score, row)
+        elif score > h[0][0]:
+            _, old = heapq.heapreplace(h, (score, rid))
+            d.pop(old, None)
+            d[rid] = (score, row)
+
+    for p in sorted(PARTS):
+        for row in iter_rows(p):
+            toks = set(tokens(row[1]))
+            is_general = "عمومی" in row[8]
+            acc = defaultdict(float)
+            for t in toks:
+                for i in vocab.get(t, ()):
+                    acc[i] += idf[t]
+            for i, s in acc.items():
+                if is_general:
+                    shared = sum(1 for t in toks if t in pset[i])
+                    score = s / (s + 2.5 * (len(toks) - shared))
+                    if score >= 0.3:
+                        offer(gen[i], score, row, 4)
+                else:
+                    score = s / total[i]
+                    if score >= 0.25:
+                        offer(spec[i], score, row, top)
+        print(f"PROGRESS score part {p} t={round(time.time() - t0)}s", flush=True)
+        keepalive()
+
+    def fmt(slot):
+        return [{"score": round(sc, 3), "id": r[0], "desc": r[1], "vat": r[2], "taxable": r[3],
+                 "exp": r[5], "edited": r[7], "type": r[8]}
+                for sc, r in sorted(slot[0].values(), key=lambda x: -x[0])]
+
+    return [{"product": name, "tokens": prods[i], "specific": fmt(spec[i]), "general": fmt(gen[i])}
+            for i, name in enumerate(names)]
+
+
 def run_job():
     job = os.environ.get("JOB", "").strip()
     if not job:
@@ -278,6 +370,12 @@ def run_job():
         try:
             if kind == "inspect":
                 log_result(step, inspect_part(int(arg)))
+            elif kind == "match_sample":
+                here = os.path.dirname(os.path.abspath(__file__))
+                with open(os.path.join(here, "sample_products.txt"), encoding="utf-8") as f:
+                    names = [x.strip() for x in f if x.strip()]
+                for n, res in enumerate(match_products(names), 1):
+                    log_result(f"match:{n}", res)
             elif kind == "stats":
                 parts = [int(x) for x in arg.split(",")] if arg else sorted(PARTS)
                 stats_all(parts)
