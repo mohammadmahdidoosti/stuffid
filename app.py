@@ -283,7 +283,7 @@ def iter_rows(part):
                     yield row
 
 
-def match_products(names, top=6):
+def match_products(names, top=6, parts=None):
     """Score every stuff-ID row against each product name (token overlap weighted by IDF)."""
     import heapq
     import math
@@ -328,7 +328,7 @@ def match_products(names, top=6):
             d.pop(old, None)
             d[rid] = (score, row)
 
-    for p in sorted(PARTS):
+    for p in (parts or sorted(PARTS)):
         for row in iter_rows(p):
             toks = set(tokens(row[1]))
             is_general = "عمومی" in row[8]
@@ -372,7 +372,8 @@ def run_job():
                 here = os.path.dirname(os.path.abspath(__file__))
                 with open(os.path.join(here, "sample_products.txt"), encoding="utf-8") as f:
                     names = [x.strip() for x in f if x.strip()]
-                for n, res in enumerate(match_products(names), 1):
+                parts = [int(x) for x in arg.split(",")] if arg else None
+                for n, res in enumerate(match_products(names, parts=parts), 1):
                     log_result(f"match:{n}", res)
             elif kind == "stats":
                 parts = [int(x) for x in arg.split(",")] if arg else sorted(PARTS)
