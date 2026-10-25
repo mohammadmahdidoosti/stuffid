@@ -305,7 +305,7 @@ def match_products(names, top=6):
             if t in vocab:
                 df[t] += 1
     print(f"PROGRESS df sample rows={n_rows} t={round(time.time() - t0)}s", flush=True)
-    idf = {t: math.log((n_rows + 1) / (df.get(t, 0) + 1)) for t in vocab}
+    idf = {t: max(0.05, math.log((n_rows + 1) / (df.get(t, 0) + 1))) for t in vocab}
     total = [sum(idf[t] for t in toks) or 1.0 for toks in prods]
     pset = [set(toks) for toks in prods]
 
@@ -339,7 +339,7 @@ def match_products(names, top=6):
             for i, s in acc.items():
                 if is_general:
                     shared = sum(1 for t in toks if t in pset[i])
-                    score = s / (s + 2.5 * (len(toks) - shared))
+                    score = s / (s + 2.5 * (len(toks) - shared)) if s > 0 else 0.0
                     if score >= 0.3:
                         offer(gen[i], score, row, 4)
                 else:
