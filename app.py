@@ -299,14 +299,12 @@ def match_products(names, top=6):
     t0 = time.time()
     df = defaultdict(int)
     n_rows = 0
-    for p in sorted(PARTS):
-        for row in iter_rows(p):
-            n_rows += 1
-            for t in set(tokens(row[1])):
-                if t in vocab:
-                    df[t] += 1
-        print(f"PROGRESS df part {p} t={round(time.time() - t0)}s", flush=True)
-        keepalive()
+    for row in iter_rows(7):  # ~82k rows: a large enough sample to estimate token rarity
+        n_rows += 1
+        for t in set(tokens(row[1])):
+            if t in vocab:
+                df[t] += 1
+    print(f"PROGRESS df sample rows={n_rows} t={round(time.time() - t0)}s", flush=True)
     idf = {t: math.log((n_rows + 1) / (df.get(t, 0) + 1)) for t in vocab}
     total = [sum(idf[t] for t in toks) or 1.0 for toks in prods]
     pset = [set(toks) for toks in prods]

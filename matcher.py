@@ -11,23 +11,22 @@ _AR = str.maketrans({
 STOP = set("""و با در از به برای که یا هر این آن سایز مدل برند نوع سری کد شماره فنی سازنده ایران
 عدد عددی دارای بدون طرح رنگ میلی متر اینچ سانت x - the of and""".split())
 
-_SPLIT = re.compile(r"[^\w\-/\.+]+", re.UNICODE)
+_PUNCT = {ord(c): " " for c in ",;:!?()[]{}\"'«»|\\#%&=<>@~^`_"}
+_TBL = {**_AR, **_PUNCT}
 
 
 def normalize(s):
-    s = (s or "").translate(_AR).lower()
-    s = re.sub(r"[ً-ٰٟ]", "", s)  # harakat
-    return s
+    return (s or "").translate(_TBL).lower()
 
 
 def tokens(s):
     out = []
-    for t in _SPLIT.split(normalize(s)):
+    for t in normalize(s).split():
         t = t.strip("-./+")
         if not t or t in STOP:
             continue
         out.append(t)
         # model codes like 4v210-06 also contribute their parts
-        if re.search(r"[a-z]", t) and re.search(r"\d", t) and re.search(r"[-/.]", t):
-            out.extend(p for p in re.split(r"[-/.]", t) if len(p) >= 2)
+        if "-" in t and not t.isdigit():
+            out.extend(p for p in t.replace("/", "-").replace(".", "-").split("-") if len(p) >= 2)
     return out
