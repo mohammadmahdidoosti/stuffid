@@ -161,5 +161,43 @@ def inspect():
     return as_json(res)
 
 
+def log_result(tag, obj):
+    """Write a result to stdout in chunks so it can be read back from Render logs."""
+    text = json.dumps(obj, ensure_ascii=False, default=str)
+    size = 2500
+    chunks = [text[i:i + size] for i in range(0, len(text), size)] or [""]
+    for n, c in enumerate(chunks, 1):
+        print(f"RESULT {tag} {n}/{len(chunks)} {c}", flush=True)
+
+
+def keepalive():
+    """Free Render services sleep after ~15 min without traffic; ping ourselves while a job runs."""
+    url = os.environ.get("RENDER_EXTERNAL_URL")
+    if url:
+        try:
+            requests.get(url, timeout=20)
+        except Exception:
+            pass
+
+
+def run_job():
+    job = os.environ.get("JOB", "").strip()
+    if not job:
+        return
+    print(f"JOB start {job}", flush=True)
+    for step in job.split(";"):
+        kind, _, arg = step.partition(":")
+        try:
+            if kind == "inspect":
+                log_result(step, inspect_part(int(arg)))
+        except Exception as ex:
+            log_result(step, {"error": repr(ex)})
+        keepalive()
+    print(f"JOB done {job}", flush=True)
+
+
+threading.Thread(target=run_job, daemon=True).start()
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
