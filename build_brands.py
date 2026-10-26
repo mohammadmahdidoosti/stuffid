@@ -5,17 +5,27 @@ A brand is imported when >=70% of the specific IDs mentioning it are imported, d
 otherwise ambiguous (left out, so the plugin falls back to its default origin).
 """
 import json
+import re
 import sys
 
 counts = json.load(open(sys.argv[1], encoding="utf-8"))
 aliases = set(json.load(open("brand_aliases.json", encoding="utf-8")))
+# words that slipped into the alias list but are not brands
+GENERIC = set("""مهندسی استیل چین ایتالیا الومینیوم برنجی بار هدف پاکت پله جریان میل وات چدنی راحت بیت وال
+black seal spa rope pin fix quick speed int era mar counter vac ofr msc s.s sda dpl lsm copper
+epe xpe bldc mvsc adj pvc upvc""".split())
 out, amb, rare = [], [], []
-for a, (imp, dom) in counts.items():
-    if a not in aliases:
+for a in aliases:
+    if a in GENERIC:
         continue
+    imp, dom = counts.get(a, [0, 0])
     tot = imp + dom
     if tot < 3:
-        rare.append(a)
+        # too little data: latin-named brands in this catalog are imports; persian ones fall back to the default
+        if re.fullmatch(r"[a-z]{3,}", a):
+            out.append([a, "I"])
+        else:
+            rare.append(a)
         continue
     share = imp / tot
     if share >= 0.7:
