@@ -61,7 +61,7 @@
                 var d = r.data; n += d.filled + d.none + d.skipped;
                 tot.filled += d.filled; tot.none += d.none; tot.skipped += d.skipped;
                 $p.text(n + ' محصول بررسی شد — پر شد: ' + tot.filled + '، بدون پیشنهاد: ' + tot.none + '، بدون تغییر: ' + tot.skipped);
-                $bar.css('width', Math.min(100, 5 + n / 300) + '%');
+                $bar.css('width', Math.min(99, 1 + n * 100 / Math.max(1, HYS.total || 30000)) + '%');
                 if (d.done) { $bar.css('width', '100%'); $p.append(' — تمام شد.'); $btn.prop('disabled', false); return; }
                 step(d.last);
             }).fail(function () {

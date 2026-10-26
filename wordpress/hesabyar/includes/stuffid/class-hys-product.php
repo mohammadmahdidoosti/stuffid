@@ -107,10 +107,11 @@ class HYS_Product {
         update_post_meta($product_id, self::META_ID, $s['id']);
         update_post_meta($product_id, self::META_AUTO, $s['id']);
         $vat = (string) get_post_meta($product_id, self::META_VAT, true);
-        if (HYS_Settings::get('fill_vat') && ($vat === '' || ($replace_auto && $auto !== ''))) {
+        $set_vat = HYS_Settings::get('fill_vat') && ($vat === '' || ($replace_auto && $auto !== ''));
+        if ($set_vat) {
             update_post_meta($product_id, self::META_VAT, $s['vat']);
         }
-        self::sync_hesabyar($product_id);
+        self::update_hesabyar_rows($product_id, $s['id'], $set_vat ? (float) $s['vat'] : null, $current);
         return 'filled';
     }
 
@@ -123,6 +124,33 @@ class HYS_Product {
             update_post_meta($product_id, self::META_VAT, (float) $row['vat']);
         }
         self::sync_hesabyar($product_id);
+    }
+
+    /**
+     * Light update of Hesabyar's own product rows that already exist for this product
+     * (and its variations that have no ID of their own). Rows are not created here:
+     * Hesabyar syncs a product itself when it builds an invoice from an order.
+     */
+    public static function update_hesabyar_rows($product_id, $stuff_id, $vat, $old_id) {
+        if (!class_exists('HY_DB')) {
+            return;
+        }
+        global $wpdb;
+        $t = HY_DB::table('products');
+        $ids = array((int) $product_id);
+        $children = $wpdb->get_col($wpdb->prepare(
+            "SELECT p.ID FROM {$wpdb->posts} p LEFT JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = '_hy_stuff_id'
+             WHERE p.post_parent = %d AND p.post_type = 'product_variation' AND (m.meta_value IS NULL OR m.meta_value = '')",
+            $product_id
+        ));
+        foreach ($children as $c) {
+            $ids[] = (int) $c;
+        }
+        $in = implode(',', array_map('intval', $ids));
+        $sql = $vat === null
+            ? $wpdb->prepare("UPDATE $t SET stuff_id = %s WHERE wc_product_id IN ($in) AND (stuff_id = '' OR stuff_id = %s)", $stuff_id, (string) $old_id)
+            : $wpdb->prepare("UPDATE $t SET stuff_id = %s, vat_rate = %f WHERE wc_product_id IN ($in) AND (stuff_id = '' OR stuff_id = %s)", $stuff_id, $vat, (string) $old_id);
+        $wpdb->query($sql);
     }
 
     /** Keeps Hesabyar's own product table in step with the WooCommerce meta. */
@@ -146,18 +174,25 @@ class HYS_Product {
      * Processes the next batch of products after $after_id.
      * @return array next cursor and counters
      */
-    public static function batch($after_id, $replace_auto, $size = 100) {
+    public static function batch($after_id, $replace_auto, $size = 500, $seconds = 20) {
         global $wpdb;
+        $start = microtime(true);
         $ids = $wpdb->get_col($wpdb->prepare(
             "SELECT ID FROM {$wpdb->posts} WHERE post_type = 'product' AND post_status IN ('publish','private','draft','pending') AND ID > %d ORDER BY ID LIMIT %d",
             $after_id, $size
         ));
-        $out = array('filled' => 0, 'none' => 0, 'skipped' => 0, 'last' => $after_id, 'done' => count($ids) < $size);
+        $out = array('filled' => 0, 'none' => 0, 'skipped' => 0, 'last' => $after_id, 'done' => false);
+        $n = 0;
         foreach ($ids as $id) {
             $r = self::apply((int) $id, $replace_auto);
             $out[$r]++;
             $out['last'] = (int) $id;
+            $n++;
+            if (microtime(true) - $start > $seconds) {
+                break; // time box: stay well under the host's request limit
+            }
         }
+        $out['done'] = ($n === count($ids)) && count($ids) < $size;
         return $out;
     }
 }

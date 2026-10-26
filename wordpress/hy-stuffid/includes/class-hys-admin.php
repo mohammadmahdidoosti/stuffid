@@ -39,6 +39,7 @@ class HYS_Admin {
         wp_localize_script('hys', 'HYS', array(
             'ajax' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('hys'),
+            'total' => (int) wp_count_posts('product')->publish,
         ));
     }
 
@@ -53,7 +54,7 @@ class HYS_Admin {
         @set_time_limit(120);
         $after = isset($_POST['after']) ? (int) $_POST['after'] : 0;
         $replace = !empty($_POST['replace_auto']);
-        wp_send_json_success(HYS_Product::batch($after, $replace, 100));
+        wp_send_json_success(HYS_Product::batch($after, $replace));
     }
 
     public static function ajax_search() {
