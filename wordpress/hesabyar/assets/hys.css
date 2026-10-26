@@ -1,0 +1,14 @@
+.hys-wrap { max-width: 1100px; }
+.hys-cards { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+.hys-cards div { background: #fff; border: 1px solid #dcdcde; border-radius: 6px; padding: 12px 16px; min-width: 140px; }
+.hys-cards b { display: block; font-size: 22px; margin-bottom: 4px; }
+.hys-cards .warn b { color: #b32d2e; }
+.hys-panel { background: #fff; border: 1px solid #dcdcde; border-radius: 6px; padding: 4px 16px 16px; margin-bottom: 16px; }
+.hys-bar { height: 6px; background: #f0f0f1; border-radius: 3px; overflow: hidden; }
+.hys-bar span { display: block; height: 100%; width: 0; background: #2271b1; transition: width .3s; }
+.hys-results { display: block; margin-top: 4px; }
+.hys-results .hys-pick { display: block; margin: 2px 0; white-space: normal; text-align: right; height: auto; line-height: 1.6; }
+.hys-table td { vertical-align: top; }
+.hys-table .hys-q { width: 100%; }
+.hys-box .hys-inner { display: inline-block; max-width: 70%; line-height: 1.8; }
+.hys-tag { background: #f0f6fc; border: 1px solid #c5d9ed; border-radius: 3px; padding: 0 6px; font-size: 11px; }
