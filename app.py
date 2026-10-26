@@ -389,6 +389,38 @@ def export_general():
     print(f"GENDONE chunks={n} rows={len(lines)}", flush=True)
 
 
+def brand_origin(parts):
+    """Count, for each brand alias, how many specific IDs mention it, split by imported/domestic."""
+    from collections import defaultdict
+    from matcher import normalize
+    here = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(here, "brand_aliases.json"), encoding="utf-8") as f:
+        aliases = set(json.load(f))
+    maxn = max(len(a.split()) for a in aliases)
+    counts = defaultdict(lambda: [0, 0])  # [imported, domestic]
+    t0 = time.time()
+    for p in parts:
+        for row in iter_rows(p):
+            t = row[8]
+            if "اختصاصی" not in t:
+                continue
+            k = 0 if "وارداتی" in t else 1
+            w = normalize(row[1]).split()
+            seen = set()
+            for i in range(len(w)):
+                for j in range(1, maxn + 1):
+                    if i + j > len(w):
+                        break
+                    g = " ".join(w[i:i + j])
+                    if g in aliases:
+                        seen.add(g)
+            for g in seen:
+                counts[g][k] += 1
+        print(f"PROGRESS brand part {p} t={round(time.time() - t0)}s", flush=True)
+        keepalive()
+    log_result("brand_origin:" + ",".join(map(str, parts)), dict(counts))
+
+
 def run_job():
     job = os.environ.get("JOB", "").strip()
     if not job:
@@ -406,6 +438,8 @@ def run_job():
                 parts = [int(x) for x in arg.split(",")] if arg else None
                 for n, res in enumerate(match_products(names, parts=parts), 1):
                     log_result(f"match:{n}", res)
+            elif kind == "brand_origin":
+                brand_origin([int(x) for x in arg.split(",")] if arg else sorted(PARTS))
             elif kind == "export_general":
                 export_general()
             elif kind == "stats":
