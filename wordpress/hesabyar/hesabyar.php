@@ -2,7 +2,7 @@
 /**
  * Plugin Name: حساب‌یار مودیان
  * Description: حسابداری سبک فروش (اشخاص، کالاها، فاکتور فروش و برگشت از فروش) با ارسال مستقیم صورتحساب به سامانه مودیان و اتصال به ووکامرس.
- * Version: 1.1.1
+ * Version: 1.1.2
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * Author: Hesabyar
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('HY_VERSION', '1.1.1');
+define('HY_VERSION', '1.1.2');
 define('HY_FILE', __FILE__);
 define('HY_DIR', plugin_dir_path(__FILE__));
 define('HY_URL', plugin_dir_url(__FILE__));
