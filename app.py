@@ -389,6 +389,9 @@ def export_general():
     print(f"GENDONE chunks={n} rows={len(lines)}", flush=True)
 
 
+_BRAND_RX = __import__("re").compile(r"(برند|سازنده|تولید کننده|تولیدکننده)\s+([^،,]{2,60})")
+
+
 def brand_origin(parts):
     """Count, for each brand alias, how many specific IDs mention it, split by imported/domestic."""
     from collections import defaultdict
@@ -396,7 +399,6 @@ def brand_origin(parts):
     here = os.path.dirname(os.path.abspath(__file__))
     with open(os.path.join(here, "brand_aliases.json"), encoding="utf-8") as f:
         aliases = set(json.load(f))
-    maxn = max(len(a.split()) for a in aliases)
     counts = defaultdict(lambda: [0, 0])  # [imported, domestic]
     t0 = time.time()
     for p in parts:
@@ -405,15 +407,14 @@ def brand_origin(parts):
             if "اختصاصی" not in t:
                 continue
             k = 0 if "وارداتی" in t else 1
-            w = normalize(row[1]).split()
             seen = set()
-            for i in range(len(w)):
-                for j in range(1, maxn + 1):
-                    if i + j > len(w):
-                        break
-                    g = " ".join(w[i:i + j])
-                    if g in aliases:
-                        seen.add(g)
+            for m in _BRAND_RX.finditer(row[1]):
+                ph = " ".join(normalize(m.group(2)).split())
+                if ph in aliases:
+                    seen.add(ph)
+                for w in ph.split():
+                    if w in aliases:
+                        seen.add(w)
             for g in seen:
                 counts[g][k] += 1
         print(f"PROGRESS brand part {p} t={round(time.time() - t0)}s", flush=True)

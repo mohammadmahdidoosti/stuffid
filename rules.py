@@ -46,6 +46,7 @@ def fitting(item, has_gravity_metal=True, has_gravity_poly=True, metal_split=Tru
             return f"{item} انتقال مایع {press} {FL}"
         mat = "فلزی" if m else "غیر فلزی"
         return f"{item} انتقال مایع {press} {mat} {FL}"
+    f.spec = {"fn": "fitting", "item": item, "gm": has_gravity_metal, "gp": has_gravity_poly, "split": metal_split}
     return f
 
 
@@ -66,6 +67,12 @@ def cap(n):
 def nut(n):
     return ("مهره ماسوره انتقال مایع تحت فشار فلزی " if _metal(n) else
             "مهره ماسوره انتقال مایع تحت فشار غیرفلزی ") + FL
+
+
+pipe.spec = {"fn": "pipe"}
+flange.spec = {"fn": "flange"}
+cap.spec = {"fn": "cap"}
+nut.spec = {"fn": "nut"}
 
 
 PN = "سیستم پنوماتیک"
@@ -293,6 +300,9 @@ def pneu_fitting(n):
     return "کوپلینگ اتصالات " + PN
 
 
+pneu_fitting.spec = {"fn": "pneu_fitting"}
+
+
 _COMPILED = [(re.compile(p), t if t is not None else pneu_fitting, p) for p, t in RULES]
 
 
@@ -307,3 +317,17 @@ def classify(name):
             desc = target(n) if callable(target) else target
             return desc, label
     return None, None
+
+
+def export():
+    """Rules and helper regexes as plain data, for the PHP port."""
+    out = []
+    for p, t in RULES:
+        t = pneu_fitting if t is None else t
+        out.append({"p": p, "f": t.spec} if callable(t) else {"p": p, "t": t})
+    return {
+        "rules": out,
+        "poly": _POLY.pattern, "metal": _METAL.pattern, "gravity": _GRAVITY.pattern, "pressure": _PRESSURE.pattern,
+        "pneu_fit": [{"p": p, "t": d} for p, d in _PNEU_FIT],
+        "FL": FL, "PN": PN,
+    }
